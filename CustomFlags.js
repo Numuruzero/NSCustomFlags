@@ -1,27 +1,29 @@
 // ==UserScript==
 // @name        NetSuite Custom Flags
 // @namespace   jhutt.com
-// @description A small script to add custom flags to OP NetSuite
-// @license MIT
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.1
+// @version     0.2
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
 
 // Determine if the record is in edit mode
+// console.log('Determining edit mode');
 const edCheck = new RegExp('e=T');
 const url = window.location.href;
 let isEd;
 edCheck.test(url) ? isEd = true : isEd = false;
+// isEd ? console.log('Page is in edit mode') : console.log('Page is not in edit mode');
 
 // Custom flags
 const flags = {
   boPresent : false,
   boItems : [],
-  discountHigh : false
+  discountHigh : false,
+  custNoGroms : false,
+  hasCustom : false
 };
 
 // Item row numbers
@@ -135,7 +137,7 @@ const buildItemTable = () => {
       row++
       };
   }
-  console.log(itmCol);
+  // console.log(itmCol);
   return itemTable;
 }
 
@@ -145,6 +147,7 @@ const boESDs = {
   skus : [],
   isAll : true
 };
+
 const boESDCheck = () => {
   for (let i = 0; i <= theTable.length-1; i++) {
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
@@ -157,11 +160,51 @@ const boESDCheck = () => {
 
 const lowDiscountCheck = () => {
   if (document.querySelector("#discountrate_fs_lbl_uir_label")) {
-    let discount = document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.innerText;
+    let discount = isEd ? document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.value : document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.innerText;
     discount = Number(discount.substring(0,discount.length-1));
     if (Math.abs(discount) > 10) {
       flags.discountHigh = true;
     }
+  }
+}
+
+// Could check against SKU, determine if parent and disregard
+// Could check qty and make sure grommets match top qty
+// Alternatively, could just make sure last grommet index is higher than desk index
+// Option one could run into issues if desktop has odd number of grommets
+const customTopGrommetCheck = () => {
+  const iteArray = [];
+  const descArray = [];
+  const qtyArray = [];
+  const deskInds = [];
+  const gromInds = [];
+  let deskQty = 0
+  let gromQty = 0
+  // const isCust = new RegExp(/Custom.*Desk/);
+  // const isGrom = new RegExp(/grommet/);
+  theTable.forEach((element) => {
+    iteArray.push(element[0]);
+    descArray.push(element[1]);
+    qtyArray.push(element[6]);
+  });
+  descArray.forEach((element, index) => {
+    if (element.includes('Custom') && element.includes('Desk') && !iteArray[index].includes('PARENT')) {
+      deskInds.push(index);
+      deskQty += Number(qtyArray[index]);
+    } else if (element.includes('grommet') || element.includes('Grommet')) {
+      gromInds.push(index);
+      if (iteArray[index].includes('KITGROMMET-none')) {
+        gromQty += Number(qtyArray[index])*2;
+      } else {
+        gromQty += Number(qtyArray[index]);
+      }
+    }
+  });
+  if (gromQty < deskQty) {
+    flags.custNoGroms = true;
+  }
+  if (deskQty > 0) {
+    flags.hasCustom = true;
   }
 }
 
@@ -219,10 +262,12 @@ const buildBOFlag = () => {
 const performChecks = () => {
   boESDCheck();
   lowDiscountCheck();
+  customTopGrommetCheck();
 }
 
 const buildCustomFlags = () => {
   const flagDiv = document.createElement("div");
+  flagDiv.style.fontSize = "13px";
   flagDiv.id = "custflags";
   // BO flag for items with no ESD
   const boESDFlag = buildBOFlag();
@@ -230,6 +275,9 @@ const buildCustomFlags = () => {
   // Discount flag for a discount over 10%
   const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh);
   flagDiv.appendChild(discountFlag);
+  // Flag for checking if custom desktops are present and if so have grommet SKUs
+  const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom);
+  flagDiv.appendChild(customsFlag);
   document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
 
@@ -238,9 +286,12 @@ const tableCheck = VM.observe(document.body, () => {
   const node = (isEd) ? document.querySelector(`#item_row_1 > td:nth-child(1)`) : document.querySelector(`#item_splits > tbody > tr:nth-child(2) > td:nth-child(1)`);
 
   if (node) {
+    // console.log('Building item table')
     theTable = buildItemTable();
-    console.log(theTable);
+    // console.log(theTable);
+    // console.log('Checking flag conditions')
     performChecks();
+    // console.log('Inserting custom flags')
     buildCustomFlags();
 
     // disconnect observer
