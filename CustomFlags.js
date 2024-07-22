@@ -4,7 +4,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.2
+// @version     0.3
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -23,7 +23,8 @@ const flags = {
   boItems : [],
   discountHigh : false,
   custNoGroms : false,
-  hasCustom : false
+  hasCustom : false,
+  needShipCost : false
 };
 
 // Item row numbers
@@ -145,9 +146,11 @@ let theTable = [];
 
 const boESDs = {
   skus : [],
+  isSome : false,
   isAll : true
 };
 
+// Begin check functions
 const boESDCheck = () => {
   for (let i = 0; i <= theTable.length-1; i++) {
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
@@ -156,6 +159,7 @@ const boESDCheck = () => {
       boESDs.isAll = false;
     }
   }
+  if (boESDs.skus.length != 0) { boESDs.isSome = true };
 }
 
 const lowDiscountCheck = () => {
@@ -168,10 +172,6 @@ const lowDiscountCheck = () => {
   }
 }
 
-// Could check against SKU, determine if parent and disregard
-// Could check qty and make sure grommets match top qty
-// Alternatively, could just make sure last grommet index is higher than desk index
-// Option one could run into issues if desktop has odd number of grommets
 const customTopGrommetCheck = () => {
   const iteArray = [];
   const descArray = [];
@@ -208,6 +208,25 @@ const customTopGrommetCheck = () => {
   }
 }
 
+const intlShipCheck = () => {
+  const shipAdd = isEd ? document.querySelector("#shipaddress").innerHTML : document.querySelector("#shipaddress_fs_lbl_uir_label").nextElementSibling.innerText;
+  const usContl = new RegExp(/AL|AZ|AR|CA|CO|CT|DE|DC|FL|GA|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|VI|WA|WV|WI|WY/);
+  let shipCost = 0;
+  if (isEd) {
+    if (document.querySelector("#shippingcost_formattedValue")) {
+      shipCost = Number(document.querySelector("#shippingcost_formattedValue").value);
+    }
+  } else {
+    if (document.querySelector("#shippingcost_fs_lbl_uir_label")) {
+      shipCost = Number(document.querySelector("#shippingcost_fs_lbl_uir_label").nextElementSibling.innerText);
+    }
+  }
+  if (!usContl.test(shipAdd) && shipCost == 0) {
+    flags.needShipCost = true;
+  }
+}
+// End check functions
+
 /**
  * A function to build various testing flags
  * @constructor
@@ -235,34 +254,11 @@ const flagBuilder = (id, text, test) => {
   return flag;
 }
 
-const buildBOFlag = () => {
-  const boFlag = document.createElement("div");
-  boFlag.id = "boflag";
-  if (boESDs.skus.length == 0) {
-    boFlag.style.display = "none";
-  } else {
-    boFlag.style.display = "flex";
-  }
-  const boFlagChk = document.createElement("input");
-  boFlagChk.type = "checkbox";
-  boFlagChk.id = "boesd";
-  boFlagChk.checked = "true";
-  const boFlagP = document.createElement("p");
-  boFlagP.style.marginLeft = "5px";
-  boESDs.isAll == true ? boFlagP.innerHTML = "Backorder ESD flag exists but all BO items are waiting for transfer" : boFlagP.innerHTML = `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`;
-  boFlag.appendChild(boFlagChk);
-  boFlag.appendChild(boFlagP);
-  // console.log(boESDs.skus);
-  // if (boESDs.skus.length == 0) {
-  //   console.log(boESDs.skus);
-  // }
-  return boFlag;
-}
-
 const performChecks = () => {
   boESDCheck();
   lowDiscountCheck();
   customTopGrommetCheck();
+  intlShipCheck();
 }
 
 const buildCustomFlags = () => {
@@ -270,7 +266,7 @@ const buildCustomFlags = () => {
   flagDiv.style.fontSize = "13px";
   flagDiv.id = "custflags";
   // BO flag for items with no ESD
-  const boESDFlag = buildBOFlag();
+  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome);
   flagDiv.appendChild(boESDFlag);
   // Discount flag for a discount over 10%
   const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh);
@@ -278,6 +274,9 @@ const buildCustomFlags = () => {
   // Flag for checking if custom desktops are present and if so have grommet SKUs
   const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom);
   flagDiv.appendChild(customsFlag);
+  // Flag for checking if the order is going outside US48 and has a ship cost
+  const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost);
+  flagDiv.appendChild(shipCostFlag);
   document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
 
