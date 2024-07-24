@@ -4,7 +4,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.41
+// @version     0.42
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -264,12 +264,14 @@ const flagBuilder = (id, text, test, color) => {
   }
   const flagBG = document.createElement("div");
   flagBG.style.position = "relative";
-  flagBG.style.display = "flex";
-  flagBG.style.flexWrap = "wrap";
+  flagBG.style.display = "grid";
+  // flagBG.style.flexWrap = "wrap";
+  flagBG.style.gridTemplateColumns = "auto auto";
   flagBG.style.alignContent = "center";
-  flagBG.style.height = "30px";
+  flagBG.style.height = "auto";
   flagBG.style.borderRadius = "8px";
   flagBG.style.padding = "0px 6px";
+  flagBG.style.margin = "0px 0px 12px 0px";
   switch (color) {
     case "yellow":
       flagBG.style.backgroundColor = "#fffc85";
@@ -281,6 +283,7 @@ const flagBuilder = (id, text, test, color) => {
       flagBG.style.backgroundColor = "#b0f3c2";
       break;
   }
+  const flagInner = document.createElement("div");
   const flagChk = document.createElement("input");
   flagChk.type = "checkbox";
   flagChk.id = id + "check";
@@ -288,6 +291,9 @@ const flagBuilder = (id, text, test, color) => {
   const flagP = document.createElement("p");
   flagP.style.marginLeft = "5px";
   flagP.innerHTML = text;
+  flagInner.appendChild(flagChk);
+  flagInner.appendChild(flagP);
+  // flagBG.appendChild(flagInner);
   flagBG.appendChild(flagChk);
   flagBG.appendChild(flagP);
   flag.appendChild(flagBG);
