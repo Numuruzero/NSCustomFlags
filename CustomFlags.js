@@ -4,7 +4,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.4
+// @version     0.41
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -241,7 +241,10 @@ const problemSKUCheck = () => {
     }
   });
   flags.probSKUs = badSKUs;
-  if (badSKUs.length > 0) flags.hasProbSKU = true;
+  if (badSKUs.length > 0) {
+    flags.hasProbSKU = true
+    };
+  };
 // End check functions
 
 /**
@@ -296,6 +299,7 @@ const performChecks = () => {
   lowDiscountCheck();
   customTopGrommetCheck();
   intlShipCheck();
+  problemSKUCheck();
 }
 
 const buildCustomFlags = () => {
