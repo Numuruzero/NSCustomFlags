@@ -1,6 +1,7 @@
 // ==UserScript==
 // @name        NetSuite Custom Flags
 // @namespace   jhutt.com
+// @license     MIT
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
