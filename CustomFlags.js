@@ -4,7 +4,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.3
+// @version     0.4
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -24,7 +24,9 @@ const flags = {
   discountHigh : false,
   custNoGroms : false,
   hasCustom : false,
-  needShipCost : false
+  needShipCost : false,
+  hasProbSKU : false,
+  probSKUs : []
 };
 
 // Item row numbers
@@ -225,6 +227,21 @@ const intlShipCheck = () => {
     flags.needShipCost = true;
   }
 }
+
+const problemSKUCheck = () => {
+  const problemSKUs = ["TOP433-60x30-B2S","TOP433-72x30-B2S","TOP433-80x30-B2S"];
+  const iteArray = [];
+  const badSKUs = [];
+  theTable.forEach((element) => {
+    iteArray.push(element[0]);
+  });
+  problemSKUs.forEach((sku) => {
+    if (iteArray.includes(sku)) {
+      badSKUs.push(sku);
+    }
+  });
+  flags.probSKUs = badSKUs;
+  if (badSKUs.length > 0) flags.hasProbSKU = true;
 // End check functions
 
 /**
@@ -234,13 +251,32 @@ const intlShipCheck = () => {
  * @param text {string} - The text which will be put next to the flag
  * @param test - Should be a statement which will evaluate to true or false. Will determine if the flag is shown (true) or not (false)
  */
-const flagBuilder = (id, text, test) => {
+const flagBuilder = (id, text, test, color) => {
   const flag = document.createElement("div");
   flag.id = id;
   if (test) {
     flag.style.display = "flex";
   } else {
     flag.style.display = "none";
+  }
+  const flagBG = document.createElement("div");
+  flagBG.style.position = "relative";
+  flagBG.style.display = "flex";
+  flagBG.style.flexWrap = "wrap";
+  flagBG.style.alignContent = "center";
+  flagBG.style.height = "30px";
+  flagBG.style.borderRadius = "8px";
+  flagBG.style.padding = "0px 6px";
+  switch (color) {
+    case "yellow":
+      flagBG.style.backgroundColor = "#fffc85";
+      break;
+    case "red":
+      flagBG.style.backgroundColor = "#ed6b6b";
+      break;
+    case "green":
+      flagBG.style.backgroundColor = "#b0f3c2";
+      break;
   }
   const flagChk = document.createElement("input");
   flagChk.type = "checkbox";
@@ -249,8 +285,9 @@ const flagBuilder = (id, text, test) => {
   const flagP = document.createElement("p");
   flagP.style.marginLeft = "5px";
   flagP.innerHTML = text;
-  flag.appendChild(flagChk);
-  flag.appendChild(flagP);
+  flagBG.appendChild(flagChk);
+  flagBG.appendChild(flagP);
+  flag.appendChild(flagBG);
   return flag;
 }
 
@@ -266,17 +303,21 @@ const buildCustomFlags = () => {
   flagDiv.style.fontSize = "13px";
   flagDiv.id = "custflags";
   // BO flag for items with no ESD
-  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome);
+  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
   flagDiv.appendChild(boESDFlag);
   // Discount flag for a discount over 10%
-  const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh);
+  const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh, "yellow");
   flagDiv.appendChild(discountFlag);
   // Flag for checking if custom desktops are present and if so have grommet SKUs
-  const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom);
+  const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom, flags.custNoGroms ? "red" : "yellow");
   flagDiv.appendChild(customsFlag);
   // Flag for checking if the order is going outside US48 and has a ship cost
-  const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost);
+  const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost, "red");
   flagDiv.appendChild(shipCostFlag);
+  // Flag for checking if a problem SKU is on an order
+  const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`);
+  flagDiv.appendChild(probSKUFlag);
+  // Add all flags to document
   document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
 
