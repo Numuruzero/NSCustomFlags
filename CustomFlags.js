@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.42
+// @version     0.43
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -27,7 +27,10 @@ const flags = {
   hasCustom : false,
   needShipCost : false,
   hasProbSKU : false,
-  probSKUs : []
+  probSKUs : [],
+  freightSKUs : [],
+  needsFreight : false,
+  isFreight : false
 };
 
 // Item row numbers
@@ -35,7 +38,8 @@ const itmCol = {
   set : false,
   itmSKU : "ITEM",
   boStatus : (isEd) ? "ESD (USED IN AUTOMATION)" : "STATUS",
-  numBO : (isEd) ? "BACK ORDERED" : "# BACKORDERED"
+  numBO : (isEd) ? "BACK ORDERED" : "# BACKORDERED",
+  needsFreight : "MUST SHIP FREIGHT?"
 };
 
 // I might be able to make this more efficient by adding 5 to validity check variables and then counting down for a valid number
@@ -93,12 +97,19 @@ const getColumnCount = () => {
  * Checks a text to see if it matches a column header, and sets according to the given number
  */
 const checkItemHeader = (check, num) => {
-  if (check === itmCol.itmSKU) {
-    itmCol.itmSKU = num;
-  } else if (check === itmCol.numBO) {
-    itmCol.numBO = num;
-  } else if (check === itmCol.boStatus) {
-    itmCol.boStatus = num;
+  switch (check) {
+    case itmCol.itmSKU:
+      itmCol.itmSKU = num;
+      break;
+    case itmCol.numBO:
+      itmCol.numBO = num;
+      break;
+    case itmCol.boStatus:
+      itmCol.boStatus = num;
+      break;
+    case itmCol.needsFreight:
+      itmCol.needsFreight = num;
+      break;
   }
 }
 
@@ -153,7 +164,26 @@ const boESDs = {
   isAll : true
 };
 
-// Begin check functions
+////////////////////////////// Begin check functions //////////////////////////////
+
+// Preset requisite  columns
+const table = {
+  SKUs: [],
+  desc: [],
+  qty: [],
+  freight: []
+}
+
+// Function to call first to fill above arrays
+const fillColumnArrays = () => {
+  theTable.forEach((element) => {
+    table.SKUs.push(element[0]);
+    table.desc.push(element[1]);
+    table.qty.push(element[6]);
+    table.freight.push(element[itmCol.needsFreight]);
+  });
+}
+
 const boESDCheck = () => {
   for (let i = 0; i <= theTable.length-1; i++) {
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
@@ -176,20 +206,15 @@ const lowDiscountCheck = () => {
 }
 
 const customTopGrommetCheck = () => {
-  const iteArray = [];
-  const descArray = [];
-  const qtyArray = [];
+  const iteArray = table.SKUs;
+  const descArray = table.desc;
+  const qtyArray = table.qty;
   const deskInds = [];
   const gromInds = [];
   let deskQty = 0
   let gromQty = 0
   // const isCust = new RegExp(/Custom.*Desk/);
   // const isGrom = new RegExp(/grommet/);
-  theTable.forEach((element) => {
-    iteArray.push(element[0]);
-    descArray.push(element[1]);
-    qtyArray.push(element[6]);
-  });
   descArray.forEach((element, index) => {
     if (element.includes('Custom') && element.includes('Desk') && !iteArray[index].includes('PARENT')) {
       deskInds.push(index);
@@ -231,11 +256,8 @@ const intlShipCheck = () => {
 
 const problemSKUCheck = () => {
   const problemSKUs = ["TOP433-60x30-B2S","TOP433-72x30-B2S","TOP433-80x30-B2S"];
-  const iteArray = [];
+  const iteArray = table.SKUs;
   const badSKUs = [];
-  theTable.forEach((element) => {
-    iteArray.push(element[0]);
-  });
   problemSKUs.forEach((sku) => {
     if (iteArray.includes(sku)) {
       badSKUs.push(sku);
@@ -246,14 +268,34 @@ const problemSKUCheck = () => {
     flags.hasProbSKU = true
     };
   };
-// End check functions
+
+const freightSKUCheck = () => {
+  const freightArray = table.freight;
+  const iteArray = table.SKUs;
+  const freightSKUs = [];
+  const shipMethod = (isEd) ? document.querySelector("#inpt_shipmethod14").value : document.querySelector("#shipmethod_fs_lbl_uir_label").nextElementSibling.innerText;
+  freightArray.forEach((line, index) => {
+    if (line == "Yes") {
+      freightSKUs.push(iteArray[index]);
+    }
+  });
+  flags.freightSKUs = freightSKUs;
+  if (freightSKUs.length != 0) {
+    flags.needsFreight = true;
+  }
+  if (shipMethod.toLowerCase().includes("freight")) {
+    flags.isFreight = true;
+  }
+}
+////////////////////////////// End check functions //////////////////////////////
 
 /**
- * A function to build various testing flags
+ * A function to build custom flags
  * @constructor
  * @param id {string} - The ID which will be passed to the element upon construction. The checkbox will be given the same ID and appended with "check"
  * @param text {string} - The text which will be put next to the flag
- * @param test - Should be a statement which will evaluate to true or false. Will determine if the flag is shown (true) or not (false)
+ * @param test {boolean} - Should be a statement or variable which will evaluate to true or false. Will determine if the flag is shown (true) or not (false)
+ * @param color {string} - Flag colors can be "green", "yellow", or "red"
  */
 const flagBuilder = (id, text, test, color) => {
   const flag = document.createElement("div");
@@ -307,6 +349,7 @@ const performChecks = () => {
   customTopGrommetCheck();
   intlShipCheck();
   problemSKUCheck();
+  freightSKUCheck();
 }
 
 const buildCustomFlags = () => {
@@ -326,9 +369,12 @@ const buildCustomFlags = () => {
   const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost, "red");
   flagDiv.appendChild(shipCostFlag);
   // Flag for checking if a problem SKU is on an order
-  const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`);
+  const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`, flags.hasProbSKU, "red");
   flagDiv.appendChild(probSKUFlag);
-  // Add all flags to document
+  // Flag for displaying what items (if any) must ship freight
+  const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? "green" : "yellow")
+  flagDiv.appendChild(freightFlag);
+  ///// Add all flags to document /////
   document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
 
@@ -339,6 +385,7 @@ const tableCheck = VM.observe(document.body, () => {
   if (node) {
     // console.log('Building item table')
     theTable = buildItemTable();
+    fillColumnArrays();
     // console.log(theTable);
     // console.log('Checking flag conditions')
     performChecks();
