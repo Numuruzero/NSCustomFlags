@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.43
+// @version     0.44
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -216,7 +216,7 @@ const customTopGrommetCheck = () => {
   // const isCust = new RegExp(/Custom.*Desk/);
   // const isGrom = new RegExp(/grommet/);
   descArray.forEach((element, index) => {
-    if (element.includes('Custom') && element.includes('Desk') && !iteArray[index].includes('PARENT')) {
+    if (element.includes('Custom') && element.includes('Desk') && !iteArray[index].includes('PARENT') && !iteArray[index].includes('SAMPLE')) {
       deskInds.push(index);
       deskQty += Number(qtyArray[index]);
     } else if (element.includes('grommet') || element.includes('Grommet')) {
@@ -273,7 +273,7 @@ const freightSKUCheck = () => {
   const freightArray = table.freight;
   const iteArray = table.SKUs;
   const freightSKUs = [];
-  const shipMethod = (isEd) ? document.querySelector("#inpt_shipmethod14").value : document.querySelector("#shipmethod_fs_lbl_uir_label").nextElementSibling.innerText;
+  const shipMethod = (isEd) ? document.querySelector("#shipmethod_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.firstElementChild.value : document.querySelector("#shipmethod_fs_lbl_uir_label").nextElementSibling.innerText;
   freightArray.forEach((line, index) => {
     if (line == "Yes") {
       freightSKUs.push(iteArray[index]);
