@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.44
+// @version     0.45
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -20,17 +20,19 @@ edCheck.test(url) ? isEd = true : isEd = false;
 
 // Custom flags
 const flags = {
-  boPresent : false,
-  boItems : [],
-  discountHigh : false,
-  custNoGroms : false,
-  hasCustom : false,
-  needShipCost : false,
-  hasProbSKU : false,
-  probSKUs : [],
-  freightSKUs : [],
-  needsFreight : false,
-  isFreight : false
+    boPresent : false,
+    boItems : [],
+    discountHigh : false,
+    custNoGroms : false,
+    hasCustom : false,
+    needShipCost : false,
+    hasProbSKU : false,
+    probSKUs : [],
+    freightSKUs : [],
+    needsFreight : false,
+    isFreight : false,
+    shouldFreight : false,
+    shouldFSKUs : []
 };
 
 // Item row numbers
@@ -238,7 +240,7 @@ const customTopGrommetCheck = () => {
 
 const intlShipCheck = () => {
   const shipAdd = isEd ? document.querySelector("#shipaddress").innerHTML : document.querySelector("#shipaddress_fs_lbl_uir_label").nextElementSibling.innerText;
-  const usContl = new RegExp(/AL|AZ|AR|CA|CO|CT|DE|DC|FL|GA|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|VI|WA|WV|WI|WY/);
+  const usContl = new RegExp(/AL|AZ|AR|CA|CO|CT|DE|DC|FL|GA|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|VI|WA|WV|WI|WY|United States Map/);
   let shipCost = 0;
   if (isEd) {
     if (document.querySelector("#shippingcost_formattedValue")) {
@@ -287,6 +289,23 @@ const freightSKUCheck = () => {
     flags.isFreight = true;
   }
 }
+
+const shouldFreightCheck = () => {
+    const iteArray = table.SKUs;
+    const descArray = table.desc;
+    const problemSKUs = [];
+    if (!flags.isFreight) {
+        descArray.forEach((element, index) => {
+            if (element.includes("Ping Pong") && element.includes("Custom")) {
+                problemSKUs.push(iteArray[index]);
+            }
+        });
+        if (problemSKUs.length > 0) {
+            flags.shouldFreight = true;
+            flags.shouldFSKUs = problemSKUs;
+        }
+    }
+}
 ////////////////////////////// End check functions //////////////////////////////
 
 /**
@@ -314,7 +333,7 @@ const flagBuilder = (id, text, test, color) => {
   flagBG.style.height = "auto";
   flagBG.style.borderRadius = "8px";
   flagBG.style.padding = "0px 6px";
-  flagBG.style.margin = "0px 0px 12px 0px";
+  flagBG.style.margin = "0px 12px 12px 0px";
   switch (color) {
     case "yellow":
       flagBG.style.backgroundColor = "#fffc85";
@@ -344,38 +363,41 @@ const flagBuilder = (id, text, test, color) => {
 }
 
 const performChecks = () => {
-  boESDCheck();
-  lowDiscountCheck();
-  customTopGrommetCheck();
-  intlShipCheck();
-  problemSKUCheck();
-  freightSKUCheck();
+    boESDCheck();
+    lowDiscountCheck();
+    customTopGrommetCheck();
+    intlShipCheck();
+    problemSKUCheck();
+    freightSKUCheck();
+    shouldFreightCheck();
 }
 
 const buildCustomFlags = () => {
-  const flagDiv = document.createElement("div");
-  flagDiv.style.fontSize = "13px";
-  flagDiv.id = "custflags";
-  // BO flag for items with no ESD
-  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
-  flagDiv.appendChild(boESDFlag);
-  // Discount flag for a discount over 10%
-  const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh, "yellow");
-  flagDiv.appendChild(discountFlag);
-  // Flag for checking if custom desktops are present and if so have grommet SKUs
-  const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom, flags.custNoGroms ? "red" : "yellow");
-  flagDiv.appendChild(customsFlag);
-  // Flag for checking if the order is going outside US48 and has a ship cost
-  const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost, "red");
-  flagDiv.appendChild(shipCostFlag);
-  // Flag for checking if a problem SKU is on an order
-  const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`, flags.hasProbSKU, "red");
-  flagDiv.appendChild(probSKUFlag);
-  // Flag for displaying what items (if any) must ship freight
-  const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? "green" : "yellow")
-  flagDiv.appendChild(freightFlag);
-  ///// Add all flags to document /////
-  document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
+    const flagDiv = document.createElement("div");
+    flagDiv.style.fontSize = "13px";
+    flagDiv.id = "custflags";
+    // BO flag for items with no ESD
+    const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
+    flagDiv.appendChild(boESDFlag);
+    // Discount flag for a discount over 10%
+    const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh, "yellow");
+    flagDiv.appendChild(discountFlag);
+    // Flag for checking if custom desktops are present and if so have grommet SKUs
+    const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom, flags.custNoGroms ? "red" : "yellow");
+    flagDiv.appendChild(customsFlag);
+    // Flag for checking if the order is going outside US48 and has a ship cost
+    const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost, "red");
+    flagDiv.appendChild(shipCostFlag);
+    // Flag for checking if a problem SKU is on an order
+    const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`, flags.hasProbSKU, "red");
+    flagDiv.appendChild(probSKUFlag);
+    // Flag for displaying what items (if any) must ship freight
+    const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? "green" : "yellow")
+    flagDiv.appendChild(freightFlag);
+    // Flag for checking if an item that should ship freight is not tripping the ship method
+    const shouldFreightFlag = flagBuilder("shouldfreightflag", `Items present need freight (${flags.shouldFSKUs.join(', ')}) but ship method is non-freight`, flags.shouldFreight, "red")
+    ///// Add all flags to document /////
+    document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
 
 const tableCheck = VM.observe(document.body, () => {
