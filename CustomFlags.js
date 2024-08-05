@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.45
+// @version     0.46
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -296,7 +296,7 @@ const shouldFreightCheck = () => {
     const problemSKUs = [];
     if (!flags.isFreight) {
         descArray.forEach((element, index) => {
-            if (element.includes("Ping Pong") && element.includes("Custom")) {
+            if (element.replace("\n"," ").includes("Ping Pong") && element.includes("Custom")) {
                 problemSKUs.push(iteArray[index]);
             }
         });
@@ -396,6 +396,7 @@ const buildCustomFlags = () => {
     flagDiv.appendChild(freightFlag);
     // Flag for checking if an item that should ship freight is not tripping the ship method
     const shouldFreightFlag = flagBuilder("shouldfreightflag", `Items present need freight (${flags.shouldFSKUs.join(', ')}) but ship method is non-freight`, flags.shouldFreight, "red")
+    flagDiv.appendChild(shouldFreightFlag);
     ///// Add all flags to document /////
     document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
