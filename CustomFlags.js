@@ -5,7 +5,7 @@
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.js
-// @version     0.46
+// @version     0.47
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -20,28 +20,30 @@ edCheck.test(url) ? isEd = true : isEd = false;
 
 // Custom flags
 const flags = {
-    boPresent : false,
-    boItems : [],
-    discountHigh : false,
-    custNoGroms : false,
-    hasCustom : false,
-    needShipCost : false,
-    hasProbSKU : false,
-    probSKUs : [],
-    freightSKUs : [],
-    needsFreight : false,
-    isFreight : false,
-    shouldFreight : false,
-    shouldFSKUs : []
+  boPresent: false,
+  boItems: [],
+  discountHigh: false,
+  custNoGroms: false,
+  hasCustom: false,
+  needShipCost: false,
+  hasProbSKU: false,
+  probSKUs: [],
+  freightSKUs: [],
+  needsFreight: false,
+  isFreight: false,
+  shouldFreight: false,
+  shouldFSKUs: [],
+  hasFreightQs: false,
+  isSPOrder: false
 };
 
 // Item row numbers
 const itmCol = {
-  set : false,
-  itmSKU : "ITEM",
-  boStatus : (isEd) ? "ESD (USED IN AUTOMATION)" : "STATUS",
-  numBO : (isEd) ? "BACK ORDERED" : "# BACKORDERED",
-  needsFreight : "MUST SHIP FREIGHT?"
+  set: false,
+  itmSKU: "ITEM",
+  boStatus: (isEd) ? "ESD (USED IN AUTOMATION)" : "STATUS",
+  numBO: (isEd) ? "BACK ORDERED" : "# BACKORDERED",
+  needsFreight: "MUST SHIP FREIGHT?"
 };
 
 // I might be able to make this more efficient by adding 5 to validity check variables and then counting down for a valid number
@@ -64,12 +66,12 @@ const getRowCount = () => {
       y++;
     }
   } else {
-      while (testRows) {
-        lastRow = y - 1;
-        testRows = document.querySelector(`#item_splits > tbody > tr:nth-child(${y}) > td:nth-child(1)`);
-        y++;
-      }
+    while (testRows) {
+      lastRow = y - 1;
+      testRows = document.querySelector(`#item_splits > tbody > tr:nth-child(${y}) > td:nth-child(1)`);
+      y++;
     }
+  }
   return lastRow;
 }
 
@@ -86,11 +88,11 @@ const getColumnCount = () => {
       x++;
     }
   } else {
-      while (testColumns) {
+    while (testColumns) {
       lastColumn = x - 1;
       testColumns = document.querySelector(`#item_splits > tbody > tr:nth-child(2) > td:nth-child(${x})`);
       x++;
-      }
+    }
   }
   return lastColumn;
 }
@@ -131,7 +133,7 @@ const buildItemTable = () => {
       while (column <= totalColumns) {
         aRow = document.querySelector(`#item_row_${row} > td:nth-child(${column})`).innerText;
         currentRow.push(aRow);
-        if (!itmCol.set) checkItemHeader(document.querySelector(`#item_headerrow > td:nth-child(${column})`).innerText,column-1);
+        if (!itmCol.set) checkItemHeader(document.querySelector(`#item_headerrow > td:nth-child(${column})`).innerText, column - 1);
         column++;
       };
       itmCol.set = true;
@@ -140,19 +142,19 @@ const buildItemTable = () => {
       row++
     };
   } else {
-      while (row <= totalRows) {
+    while (row <= totalRows) {
       currentRow = [];
-        while (column <= totalColumns) {
-          aRow = document.querySelector(`#item_splits > tbody > tr:nth-child(${row}) > td:nth-child(${column})`).innerText;
-          currentRow.push(aRow);
-          if (!itmCol.set) checkItemHeader(document.querySelector(`#item_splits > tbody > tr.uir-machine-headerrow > td:nth-child(${column})`).innerText,column-1);
-          column++;
-        };
+      while (column <= totalColumns) {
+        aRow = document.querySelector(`#item_splits > tbody > tr:nth-child(${row}) > td:nth-child(${column})`).innerText;
+        currentRow.push(aRow);
+        if (!itmCol.set) checkItemHeader(document.querySelector(`#item_splits > tbody > tr.uir-machine-headerrow > td:nth-child(${column})`).innerText, column - 1);
+        column++;
+      };
       itmCol.set = true;
       column = 1;
       itemTable.push(currentRow);
       row++
-      };
+    };
   }
   // console.log(itmCol);
   return itemTable;
@@ -161,9 +163,9 @@ const buildItemTable = () => {
 let theTable = [];
 
 const boESDs = {
-  skus : [],
-  isSome : false,
-  isAll : true
+  skus: [],
+  isSome: false,
+  isAll: true
 };
 
 ////////////////////////////// Begin check functions //////////////////////////////
@@ -187,7 +189,7 @@ const fillColumnArrays = () => {
 }
 
 const boESDCheck = () => {
-  for (let i = 0; i <= theTable.length-1; i++) {
+  for (let i = 0; i <= theTable.length - 1; i++) {
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
       boESDs.skus.push(theTable[i][itmCol.itmSKU]);
     } else if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] != 'In stock! Awaiting transfer') {
@@ -200,7 +202,7 @@ const boESDCheck = () => {
 const lowDiscountCheck = () => {
   if (document.querySelector("#discountrate_fs_lbl_uir_label")) {
     let discount = isEd ? document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.value : document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.innerText;
-    discount = Number(discount.substring(0,discount.length-1));
+    discount = Number(discount.substring(0, discount.length - 1));
     if (Math.abs(discount) > 10) {
       flags.discountHigh = true;
     }
@@ -224,7 +226,7 @@ const customTopGrommetCheck = () => {
     } else if (element.includes('grommet') || element.includes('Grommet')) {
       gromInds.push(index);
       if (iteArray[index].includes('KITGROMMET-none')) {
-        gromQty += Number(qtyArray[index])*2;
+        gromQty += Number(qtyArray[index]) * 2;
       } else {
         gromQty += Number(qtyArray[index]);
       }
@@ -240,7 +242,7 @@ const customTopGrommetCheck = () => {
 
 const intlShipCheck = () => {
   const shipAdd = isEd ? document.querySelector("#shipaddress").innerHTML : document.querySelector("#shipaddress_fs_lbl_uir_label").nextElementSibling.innerText;
-  const usContl = new RegExp(/AL|AZ|AR|CA|CO|CT|DE|DC|FL|GA|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|VI|WA|WV|WI|WY|United States Map/);
+  const usContl = new RegExp(/AL|AZ|AR|CA|CO|CT|DE|DC|FL|GA|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|VI|WA|WV|WI|WY/);
   let shipCost = 0;
   if (isEd) {
     if (document.querySelector("#shippingcost_formattedValue")) {
@@ -249,7 +251,7 @@ const intlShipCheck = () => {
   } else {
     if (document.querySelector("#shippingcost_fs_lbl_uir_label")) {
       shipCost = Number(document.querySelector("#shippingcost_fs_lbl_uir_label").nextElementSibling.innerText);
-    }
+    } else { shipCost = 0 };
   }
   if (!usContl.test(shipAdd) && shipCost == 0) {
     flags.needShipCost = true;
@@ -257,7 +259,7 @@ const intlShipCheck = () => {
 }
 
 const problemSKUCheck = () => {
-  const problemSKUs = ["TOP433-60x30-B2S","TOP433-72x30-B2S","TOP433-80x30-B2S"];
+  const problemSKUs = ["TOP433-60x30-B2S", "TOP433-72x30-B2S", "TOP433-80x30-B2S"];
   const iteArray = table.SKUs;
   const badSKUs = [];
   problemSKUs.forEach((sku) => {
@@ -268,8 +270,8 @@ const problemSKUCheck = () => {
   flags.probSKUs = badSKUs;
   if (badSKUs.length > 0) {
     flags.hasProbSKU = true
-    };
   };
+};
 
 const freightSKUCheck = () => {
   const freightArray = table.freight;
@@ -291,20 +293,33 @@ const freightSKUCheck = () => {
 }
 
 const shouldFreightCheck = () => {
-    const iteArray = table.SKUs;
-    const descArray = table.desc;
-    const problemSKUs = [];
-    if (!flags.isFreight) {
-        descArray.forEach((element, index) => {
-            if (element.replace("\n"," ").includes("Ping Pong") && element.includes("Custom")) {
-                problemSKUs.push(iteArray[index]);
-            }
-        });
-        if (problemSKUs.length > 0) {
-            flags.shouldFreight = true;
-            flags.shouldFSKUs = problemSKUs;
-        }
+  const iteArray = table.SKUs;
+  const descArray = table.desc;
+  const problemSKUs = [];
+  if (!flags.isFreight) {
+    descArray.forEach((element, index) => {
+      if (element.replace("\n", " ").includes("Ping Pong") && element.includes("Custom")) {
+        problemSKUs.push(iteArray[index]);
+      }
+    });
+    if (problemSKUs.length > 0) {
+      flags.shouldFreight = true;
+      flags.shouldFSKUs = problemSKUs;
     }
+  }
+}
+
+const freightQsCheck = () => {
+  if (document.querySelector("#custbody_sales_pro_lbl_uir_label")) {
+    flags.isSPOrder = true;
+  }
+  if (document.querySelector("#customsublist53txt")) {
+    if (document.querySelector("#customsublist53txt").nextElementSibling) {
+      if (!document.querySelector("#customsublist53txt").nextElementSibling.outerHTML.includes('display:none;')) {
+        flags.hasFreightQs = true;
+      }
+    }
+  }
 }
 ////////////////////////////// End check functions //////////////////////////////
 
@@ -363,42 +378,46 @@ const flagBuilder = (id, text, test, color) => {
 }
 
 const performChecks = () => {
-    boESDCheck();
-    lowDiscountCheck();
-    customTopGrommetCheck();
-    intlShipCheck();
-    problemSKUCheck();
-    freightSKUCheck();
-    shouldFreightCheck();
+  boESDCheck();
+  lowDiscountCheck();
+  customTopGrommetCheck();
+  intlShipCheck();
+  problemSKUCheck();
+  freightSKUCheck();
+  shouldFreightCheck();
+  freightQsCheck();
 }
 
 const buildCustomFlags = () => {
-    const flagDiv = document.createElement("div");
-    flagDiv.style.fontSize = "13px";
-    flagDiv.id = "custflags";
-    // BO flag for items with no ESD
-    const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
-    flagDiv.appendChild(boESDFlag);
-    // Discount flag for a discount over 10%
-    const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh, "yellow");
-    flagDiv.appendChild(discountFlag);
-    // Flag for checking if custom desktops are present and if so have grommet SKUs
-    const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom, flags.custNoGroms ? "red" : "yellow");
-    flagDiv.appendChild(customsFlag);
-    // Flag for checking if the order is going outside US48 and has a ship cost
-    const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost, "red");
-    flagDiv.appendChild(shipCostFlag);
-    // Flag for checking if a problem SKU is on an order
-    const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`, flags.hasProbSKU, "red");
-    flagDiv.appendChild(probSKUFlag);
-    // Flag for displaying what items (if any) must ship freight
-    const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? "green" : "yellow")
-    flagDiv.appendChild(freightFlag);
-    // Flag for checking if an item that should ship freight is not tripping the ship method
-    const shouldFreightFlag = flagBuilder("shouldfreightflag", `Items present need freight (${flags.shouldFSKUs.join(', ')}) but ship method is non-freight`, flags.shouldFreight, "red")
-    flagDiv.appendChild(shouldFreightFlag);
-    ///// Add all flags to document /////
-    document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
+  const flagDiv = document.createElement("div");
+  flagDiv.style.fontSize = "13px";
+  flagDiv.id = "custflags";
+  // BO flag for items with no ESD
+  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
+  flagDiv.appendChild(boESDFlag);
+  // Discount flag for a discount over 10%
+  const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh, "yellow");
+  flagDiv.appendChild(discountFlag);
+  // Flag for checking if custom desktops are present and if so have grommet SKUs
+  const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom, flags.custNoGroms ? "red" : "yellow");
+  flagDiv.appendChild(customsFlag);
+  // Flag for checking if the order is going outside US48 and has a ship cost
+  const shipCostFlag = flagBuilder("us48shipflag", "Order is outside US48 but no ship cost is present", flags.needShipCost, "red");
+  flagDiv.appendChild(shipCostFlag);
+  // Flag for checking if a problem SKU is on an order
+  const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`, flags.hasProbSKU, "red");
+  flagDiv.appendChild(probSKUFlag);
+  // Flag for displaying what items (if any) must ship freight
+  const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? "green" : "yellow");
+  flagDiv.appendChild(freightFlag);
+  // Flag for checking if an item that should ship freight is not tripping the ship method
+  const shouldFreightFlag = flagBuilder("shouldfreightflag", `Items present need freight (${flags.shouldFSKUs.join(', ')}) but ship method is non-freight`, flags.shouldFreight, "red")
+  flagDiv.appendChild(shouldFreightFlag);
+  // Flag for checking if an order that is shipping freight has a freight questionnaire
+  const freightQsFlag = flagBuilder("freightQsFlag", flags.isSPOrder ? `Order is shipping freight and no questionnaire is present, but the order is manual` : `Order is shipping freight and no questionnaire is present`, (flags.isFreight && !flags.hasFreightQs), flags.isSPOrder ? "yellow" : "red");
+  flagDiv.appendChild(freightQsFlag);
+  ///// Add all flags to document /////
+  document.querySelector("#custbody_order_processing_flags_val").after(flagDiv);
 }
 
 const tableCheck = VM.observe(document.body, () => {
