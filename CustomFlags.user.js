@@ -3,9 +3,10 @@
 // @namespace   jhutt.com
 // @license     MIT
 // @match       https://1206578.app.netsuite.com/app/accounting/transactions/salesord.nl*
+// @match       https://1206578.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=6165*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.user.js
-// @version     0.47
+// @version     0.48
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -46,7 +47,7 @@ const itmCol = {
   needsFreight: "MUST SHIP FREIGHT?"
 };
 
-// I might be able to make this more efficient by adding 5 to validity check variables and then counting down for a valid number
+// Might be able to make this more efficient by adding 5 to validity check variables and then counting down for a valid number
 // Content rows start at 2, accounting for header row
 /**
  * Gets the size of the order's item table programmatically, in rows
@@ -168,6 +169,36 @@ const boESDs = {
   isAll: true
 };
 
+////////////////////////////// Begin frame functions //////////////////////////////
+const addFlagsIframe = () => {
+  const flagFrame = document.createElement("iframe");
+  flagFrame.src = document.querySelector("#custbody_order_processing_flags_val > iframe").src;
+  flagFrame.title = 'Order Flags';
+  flagFrame.id = 'FlagsFrame';
+  flagFrame.style.width = '200px';
+  flagFrame.style.resize = 'both';
+  flagFrame.style.overflow = 'auto';
+
+  // Choose element to attach frame to
+  document.querySelector("#tr_fg_fieldGroup621").before(flagFrame);
+}
+
+let frameDoc;
+
+const frameTest = () => {
+  // const testVal = frameDoc.querySelectorAll("a");
+  // const testVal = frameDoc.querySelectorAll("div");
+  // console.log(testVal);
+  console.log(frameDoc);
+}
+
+const setFrameVars = () => {
+  const shipquoteFrame = document.getElementById('FlagsFrame');
+  frameDoc = shipquoteFrame.contentDocument;
+  setTimeout(frameTest, 2000);
+}
+
+
 ////////////////////////////// Begin check functions //////////////////////////////
 
 // Preset requisite  columns
@@ -203,7 +234,7 @@ const lowDiscountCheck = () => {
   if (document.querySelector("#discountrate_fs_lbl_uir_label")) {
     let discount = isEd ? document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.firstElementChild.firstElementChild.value : document.querySelector("#discountrate_fs_lbl_uir_label").nextElementSibling.innerText;
     discount = Number(discount.substring(0, discount.length - 1));
-    if (Math.abs(discount) > 10) {
+    if (Math.abs(discount) > 15) {
       flags.discountHigh = true;
     }
   }
@@ -310,6 +341,11 @@ const shouldFreightCheck = () => {
 }
 
 const freightQsCheck = () => {
+  if (isEd && document.querySelector("#inpt_salesrep1")) {
+    if (document.querySelector("#inpt_salesrep1").value != "Web Processing") {
+      flags.isSPOrder = true
+    }
+  }
   if (document.querySelector("#custbody_sales_pro_lbl_uir_label")) {
     flags.isSPOrder = true;
   }
@@ -321,6 +357,46 @@ const freightQsCheck = () => {
     }
   }
 }
+
+// const ogFlagsCheck = () => {
+//   // Script for OP flags
+//   // https://1206578.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=6165*
+//   if (url.includes("script=6165")) {
+//     localStorage.setItem("opFlags", "some");
+//     console.log(`Stored ${localStorage.opFlags} to session storage`)
+//   } else {
+//     console.log(localStorage.getItem("opFlags"));
+//   }
+// }
+
+// const ogFlagsCheck = () => {
+//   // In the sending document:
+//   if (url.includes("script=6165")) {
+//     window.postMessage('Hello from document 1!', '*');
+//   } else {
+//     // In the receiving document:
+//     window.addEventListener('message', function (event) {
+//       if (event.origin === 'https://1206578.app.netsuite.com/') { // Check the origin for security
+//         console.log(event.data); // Output: "Hello from document 1!"
+//       }
+//     });
+//   }
+// }
+
+const ogFlagsCheck = () => {
+  if (url.includes("script=6165")) {
+    globalThis.myProperty = "hello";
+  } else {
+    console.log(globalThis.myProperty);
+  }
+}
+
+window.addEventListener('load', function () {
+  ogFlagsCheck();
+})
+
+
+
 ////////////////////////////// End check functions //////////////////////////////
 
 /**
@@ -386,6 +462,7 @@ const performChecks = () => {
   freightSKUCheck();
   shouldFreightCheck();
   freightQsCheck();
+  ogFlagsCheck();
 }
 
 const buildCustomFlags = () => {
@@ -396,7 +473,7 @@ const buildCustomFlags = () => {
   const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
   flagDiv.appendChild(boESDFlag);
   // Discount flag for a discount over 10%
-  const discountFlag = flagBuilder("dscflag", "Order discount is over 10%", flags.discountHigh, "yellow");
+  const discountFlag = flagBuilder("dscflag", "Order discount is over 15%", flags.discountHigh, "yellow");
   flagDiv.appendChild(discountFlag);
   // Flag for checking if custom desktops are present and if so have grommet SKUs
   const customsFlag = flagBuilder("custsflag", flags.custNoGroms ? "Order contains custom desktops and too few grommet SKUs" : "Order contains custom desktops", flags.hasCustom, flags.custNoGroms ? "red" : "yellow");
@@ -408,7 +485,7 @@ const buildCustomFlags = () => {
   const probSKUFlag = flagBuilder("probskuflag", `Order contains one or more problem items (${flags.probSKUs.join(", ")})`, flags.hasProbSKU, "red");
   flagDiv.appendChild(probSKUFlag);
   // Flag for displaying what items (if any) must ship freight
-  const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? "green" : "yellow");
+  const freightFlag = flagBuilder("freightflag", flags.needsFreight ? `Order must ship freight due to (${flags.freightSKUs.join(", ")})${flags.isFreight ? "" : " but ship method is not freight"}` : `Order is shipping freight but no items require it`, (flags.isFreight || flags.needsFreight), flags.needsFreight ? (flags.isFreight ? "green" : "red") : "yellow");
   flagDiv.appendChild(freightFlag);
   // Flag for checking if an item that should ship freight is not tripping the ship method
   const shouldFreightFlag = flagBuilder("shouldfreightflag", `Items present need freight (${flags.shouldFSKUs.join(', ')}) but ship method is non-freight`, flags.shouldFreight, "red")
@@ -433,6 +510,19 @@ const tableCheck = VM.observe(document.body, () => {
     performChecks();
     // console.log('Inserting custom flags')
     buildCustomFlags();
+
+    // disconnect observer
+    return true;
+  }
+});
+
+const flagCheck = VM.observe(document.body, () => {
+  // Find the target node
+  const node = document.querySelector("#custbody_order_processing_flags_val");
+
+  if (node) {
+    addFlagsIframe();
+    setTimeout(setFrameVars, 6000);
 
     // disconnect observer
     return true;
