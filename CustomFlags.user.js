@@ -156,7 +156,7 @@ const boESDCheck = () => {
       boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
     } else if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] != 'In stock! Awaiting transfer') {
       boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
-      if (theTable[i][itmCol.boStatus] != '' && (!theTable[i][itmCol.boStatus].includes('ESD'))) {
+      if (theTable[i][itmCol.boStatus] != '' && ((!theTable[i][itmCol.boStatus].includes('ESD')) && !theTable[i][itmCol.boStatus].includes('due on'))) {
         boESDs.noDates.push(theTable[i][itmCol.itmSKU]);
       } else {
         boESDs.hasDates.push(theTable[i][itmCol.itmSKU]);
@@ -409,7 +409,7 @@ const buildCustomFlags = () => {
   flagDiv.style.fontSize = "13px";
   flagDiv.id = "custflags";
   // BO flag for items with no ESD
-  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? `Backorders present but all BO items are waiting for transfer (${boESDs.skus.join(', ')})${boESDs.someDates ? ` or have dates (${boESDs.hasDates.join(', ')})` : ""}` : boESDs.probItems ? `Backorders present, problem items exist with no ESD (${boESDs.noDates.join(', ')})` : ``, boESDs.isBO, boESDs.isAll ? "green" : "red");
+  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? `Backorders present but all BO items are waiting for transfer ${boESDs.isSome ? "(" + boESDs.skus.join(', ') + ")" : ""}${boESDs.someDates ? ` or have dates (${boESDs.hasDates.join(', ')})` : ""}` : boESDs.probItems ? `Backorders present, problem items exist with no ESD (${boESDs.noDates.join(', ')})` : ``, (boESDs.isBO && (boESDs.isSome || boESDs.probItems)), boESDs.isAll ? "green" : "red");
   flagDiv.appendChild(boESDFlag);
   // Discount flag for a discount over 10%
   const discountFlag = flagBuilder("dscflag", "Order discount is over 15%", flags.discountHigh, "yellow");
