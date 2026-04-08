@@ -6,7 +6,7 @@
 // @match       https://1206578.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=6165*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.user.js
-// @version     0.48
+// @version     0.49
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -15,11 +15,9 @@
 // console.log('Determining edit mode');
 const edCheck = new RegExp('e=T');
 const url = window.location.href;
-let isEd;
-edCheck.test(url) ? isEd = true : isEd = false;
-// isEd ? console.log('Page is in edit mode') : console.log('Page is not in edit mode');
+const isEd = edCheck.test(url);
 
-// Custom flags
+// Declare custom flag states
 const flags = {
   boPresent: false,
   boItems: [],
@@ -38,137 +36,68 @@ const flags = {
   isSPOrder: false
 };
 
+// New simpler function to capture table data as 2D array
+// Does not care if the table is in edit mode or not, but may return empty rows if in edit mode
+function captureTableData(tableElement) {
+  const rows = tableElement.querySelectorAll("tr");
+  const data = [];
+  rows.forEach(row => {
+    const cols = row.querySelectorAll("td,th");
+    const rowData = [];
+    cols.forEach(col => {
+      rowData.push(col.innerText.trim());
+    });
+    data.push(rowData);
+  });
+  return data;
+}
+
 // Item row numbers
 const itmCol = {
   set: false,
   itmSKU: "ITEM",
-  boStatus: (isEd) ? "ESD (USED IN AUTOMATION)" : "STATUS",
+  boStatus: (isEd) ? "ESD (USED IN AUTOMATION)" : "STATUS (NOT STORED)", // Notably, these are no longer the same field. ESD will not show transfer status
   numBO: (isEd) ? "BACK ORDERED" : "# BACKORDERED",
   needsFreight: "MUST SHIP FREIGHT?"
 };
 
-// Might be able to make this more efficient by adding 5 to validity check variables and then counting down for a valid number
-// Content rows start at 2, accounting for header row
-/**
- * Gets the size of the order's item table programmatically, in rows
- * @return The final row number. This will not necessarily be the total number of literal rows, but the final row number in the HTML.
- */
-const getRowCount = () => {
-  let testRows;
-  let lastRow = 0;
-  let y = 2;
-  testRows = document.querySelector("#item_splits > tbody > tr:nth-child(2) > td:nth-child(1)");
-  // The lines are written differently in edit mode, so we'll need to account for this while counting rows
-  if (isEd) {
-    y = 1;
-    while (testRows) {
-      lastRow = y - 1;
-      testRows = document.querySelector(`#item_row_${y} > td:nth-child(1)`);
-      y++;
-    }
-  } else {
-    while (testRows) {
-      lastRow = y - 1;
-      testRows = document.querySelector(`#item_splits > tbody > tr:nth-child(${y}) > td:nth-child(1)`);
-      y++;
-    }
-  }
-  return lastRow;
-}
-
-const getColumnCount = () => {
-  let testColumns;
-  let lastColumn = 0;
-  let x = 1;
-  testColumns = document.querySelector("#item_splits > tbody > tr:nth-child(2) > td:nth-child(1)");
-  // The lines are written differently in edit mode, so we'll need to account for this while counting rows
-  if (isEd) {
-    while (testColumns) {
-      lastColumn = x - 1;
-      testColumns = document.querySelector(`#item_row_1 > td:nth-child(${x})`);
-      x++;
-    }
-  } else {
-    while (testColumns) {
-      lastColumn = x - 1;
-      testColumns = document.querySelector(`#item_splits > tbody > tr:nth-child(2) > td:nth-child(${x})`);
-      x++;
-    }
-  }
-  return lastColumn;
-}
-
-/**
- * Checks a text to see if it matches a column header, and sets according to the given number
- */
-const checkItemHeader = (check, num) => {
-  switch (check) {
-    case itmCol.itmSKU:
-      itmCol.itmSKU = num;
-      break;
-    case itmCol.numBO:
-      itmCol.numBO = num;
-      break;
-    case itmCol.boStatus:
-      itmCol.boStatus = num;
-      break;
-    case itmCol.needsFreight:
-      itmCol.needsFreight = num;
-      break;
-  }
-}
-
 // Build an array out of the table
 const buildItemTable = () => {
-  const itemTable = [];
-  const totalRows = getRowCount();
-  const totalColumns = getColumnCount();
-  let currentRow = [];
-  let row = 2;
-  let column = 1;
-  let aRow;
-  if (isEd) {
-    row = 1;
-    while (row <= totalRows) {
-      currentRow = [];
-      while (column <= totalColumns) {
-        aRow = document.querySelector(`#item_row_${row} > td:nth-child(${column})`).innerText;
-        currentRow.push(aRow);
-        if (!itmCol.set) checkItemHeader(document.querySelector(`#item_headerrow > td:nth-child(${column})`).innerText, column - 1);
-        column++;
-      };
+  const itemTable = captureTableData(document.querySelector("#item_splits"));
+  // Make sure headers are in uppercase (NS inconsistently uses sentence case)
+  itemTable[0] = itemTable[0].map(header => header.toUpperCase().trim());
+  if (!itmCol.set) {
+    for (key in itmCol) {
+      const hdrIndex = itemTable[0].indexOf(itmCol[key]);
+      if (hdrIndex != -1) {
+        itmCol[key] = hdrIndex;
+      } else {
+        console.log(`Header ${key} not found`)
+      }
       itmCol.set = true;
-      column = 1;
-      itemTable.push(currentRow);
-      row++
-    };
-  } else {
-    while (row <= totalRows) {
-      currentRow = [];
-      while (column <= totalColumns) {
-        aRow = document.querySelector(`#item_splits > tbody > tr:nth-child(${row}) > td:nth-child(${column})`).innerText;
-        currentRow.push(aRow);
-        if (!itmCol.set) checkItemHeader(document.querySelector(`#item_splits > tbody > tr.uir-machine-headerrow > td:nth-child(${column})`).innerText, column - 1);
-        column++;
-      };
-      itmCol.set = true;
-      column = 1;
-      itemTable.push(currentRow);
-      row++
-    };
+    }
   }
-  // console.log(itmCol);
-  return itemTable;
+
+  const parsedTable = itemTable.map(row => row.map(col => `"${col.replace(/"/gm, '""')}"`));
+  // parsedTable.shift(); // Remove header row after column indices are found
+  return itemTable; // Not sure if we need to parse out the quotes since we aren't exporting this, though we may want to remove the header row
 }
 
-let theTable = [];
+let theTable = []; // We'll push buildItemTable to this
 
-const boESDs = {
+const boESDs = { // Outlier flag using specific variables for additional data
   skus: [],
-  isSome: false,
-  isAll: true
+  noDates: [],
+  hasDates: [],
+  boItems: [],
+  isBO: false, // Whether any BO items are present on the order
+  isSome: false, // Whether some BO items are waiting for transfer
+  someDates: false, // Whether some BO items have ESDs that are not transfer status
+  isAll: true, // Whether all BO items are waiting for transfer or have dates
+  probItems: false // Whether there are items genuinely with no ESD
 };
 
+/*
 ////////////////////////////// Begin frame functions //////////////////////////////
 const addFlagsIframe = () => {
   const flagFrame = document.createElement("iframe");
@@ -197,11 +126,12 @@ const setFrameVars = () => {
   frameDoc = shipquoteFrame.contentDocument;
   setTimeout(frameTest, 2000);
 }
+*/
 
 
 ////////////////////////////// Begin check functions //////////////////////////////
 
-// Preset requisite  columns
+// Preset requisite columns
 const table = {
   SKUs: [],
   desc: [],
@@ -223,11 +153,20 @@ const boESDCheck = () => {
   for (let i = 0; i <= theTable.length - 1; i++) {
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
       boESDs.skus.push(theTable[i][itmCol.itmSKU]);
+      boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
     } else if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] != 'In stock! Awaiting transfer') {
-      boESDs.isAll = false;
+      boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
+      if (theTable[i][itmCol.boStatus] != '' && (!theTable[i][itmCol.boStatus].includes('ESD'))) {
+        boESDs.noDates.push(theTable[i][itmCol.itmSKU]);
+      } else {
+        boESDs.hasDates.push(theTable[i][itmCol.itmSKU]);
+      }
     }
   }
   if (boESDs.skus.length != 0) { boESDs.isSome = true };
+  if (boESDs.noDates.length != 0) { boESDs.probItems = true; boESDs.isAll = false };
+  if (boESDs.boItems.length != 0) { boESDs.isBO = true };
+  if (boESDs.hasDates.length != 0) { boESDs.someDates = true };
 }
 
 const lowDiscountCheck = () => {
@@ -462,7 +401,7 @@ const performChecks = () => {
   freightSKUCheck();
   shouldFreightCheck();
   freightQsCheck();
-  ogFlagsCheck();
+  // ogFlagsCheck();
 }
 
 const buildCustomFlags = () => {
@@ -470,7 +409,7 @@ const buildCustomFlags = () => {
   flagDiv.style.fontSize = "13px";
   flagDiv.id = "custflags";
   // BO flag for items with no ESD
-  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? "Backorder ESD flag exists but all BO items are waiting for transfer" : `Backorder ESD flag exists, some BO items (${boESDs.skus.join(', ')}) are waiting for transfer`, boESDs.isSome, boESDs.isAll ? "green" : "yellow");
+  const boESDFlag = flagBuilder("boflag", boESDs.isAll ? `Backorders present but all BO items are waiting for transfer (${boESDs.skus.join(', ')})${boESDs.someDates ? ` or have dates (${boESDs.hasDates.join(', ')})` : ""}` : boESDs.probItems ? `Backorders present, problem items exist with no ESD (${boESDs.noDates.join(', ')})` : ``, boESDs.isBO, boESDs.isAll ? "green" : "red");
   flagDiv.appendChild(boESDFlag);
   // Discount flag for a discount over 10%
   const discountFlag = flagBuilder("dscflag", "Order discount is over 15%", flags.discountHigh, "yellow");
@@ -516,7 +455,7 @@ const tableCheck = VM.observe(document.body, () => {
   }
 });
 
-const flagCheck = VM.observe(document.body, () => {
+/* const flagCheck = VM.observe(document.body, () => {
   // Find the target node
   const node = document.querySelector("#custbody_order_processing_flags_val");
 
@@ -527,4 +466,5 @@ const flagCheck = VM.observe(document.body, () => {
     // disconnect observer
     return true;
   }
-});
+}); 
+*/
