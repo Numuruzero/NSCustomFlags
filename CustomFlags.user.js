@@ -58,7 +58,8 @@ const itmCol = {
   itmSKU: "ITEM",
   boStatus: (isEd) ? "ESD (USED IN AUTOMATION)" : "STATUS (NOT STORED)", // Notably, these are no longer the same field. ESD will not show transfer status
   numBO: (isEd) ? "BACK ORDERED" : "# BACKORDERED",
-  needsFreight: "MUST SHIP FREIGHT?"
+  needsFreight: "MUST SHIP FREIGHT?",
+  itemType: "ITEM TYPE"
 };
 
 // Build an array out of the table
@@ -154,7 +155,7 @@ const boESDCheck = () => {
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
       boESDs.skus.push(theTable[i][itmCol.itmSKU]);
       boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
-    } else if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] != 'In stock! Awaiting transfer') {
+    } else if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] != 'In stock! Awaiting transfer' && !(theTable[i][itmCol.itemType] == "Drop Ship" || theTable[i][itmCol.itemType] == "Special")) {
       boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
       if (theTable[i][itmCol.boStatus] != '' && ((!theTable[i][itmCol.boStatus].includes('ESD')) && !theTable[i][itmCol.boStatus].includes('due on'))) {
         boESDs.noDates.push(theTable[i][itmCol.itmSKU]);
