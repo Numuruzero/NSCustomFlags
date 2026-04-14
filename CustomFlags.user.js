@@ -6,7 +6,7 @@
 // @match       https://1206578.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=6165*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.user.js
-// @version     0.49
+// @version     0.50
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -142,6 +142,9 @@ const table = {
 
 // Function to call first to fill above arrays
 const fillColumnArrays = () => {
+  // console.log("theTable is:");
+  theTable = theTable.filter((row) => { return (row[0] != "") });
+  // console.log(theTable);
   theTable.forEach((element) => {
     table.SKUs.push(element[0]);
     table.desc.push(element[1]);
@@ -190,6 +193,8 @@ const customTopGrommetCheck = () => {
   let gromQty = 0
   // const isCust = new RegExp(/Custom.*Desk/);
   // const isGrom = new RegExp(/grommet/);
+  // console.log("table is:");
+  // console.log(table);
   descArray.forEach((element, index) => {
     if (element.includes('Custom') && element.includes('Desk') && !iteArray[index].includes('PARENT') && !iteArray[index].includes('SAMPLE')) {
       deskInds.push(index);
@@ -281,8 +286,8 @@ const shouldFreightCheck = () => {
 }
 
 const freightQsCheck = () => {
-  if (isEd && document.querySelector("#inpt_salesrep1")) {
-    if (document.querySelector("#inpt_salesrep1").value != "Web Processing") {
+  if (isEd && document.querySelector("#inpt_salesrep_1")) {
+    if (document.querySelector("#inpt_salesrep_1").value != "Web Processing") {
       flags.isSPOrder = true
     }
   }
@@ -444,6 +449,7 @@ const tableCheck = VM.observe(document.body, () => {
   if (node) {
     // console.log('Building item table')
     theTable = buildItemTable();
+    // Filter out empty rows which can cause false positives in checks
     fillColumnArrays();
     // console.log(theTable);
     // console.log('Checking flag conditions')
