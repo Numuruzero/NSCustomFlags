@@ -6,7 +6,7 @@
 // @match       https://1206578.extforms.netsuite.com/app/site/hosting/scriptlet.nl?script=6165*
 // @require     https://cdn.jsdelivr.net/npm/@violentmonkey/dom@2
 // @downloadURL https://raw.githubusercontent.com/Numuruzero/NSCustomFlags/main/CustomFlags.user.js
-// @version     0.50
+// @version     0.51
 // @description Provides a space for custom flags on orders
 // ==/UserScript==
 
@@ -154,15 +154,20 @@ const fillColumnArrays = () => {
 }
 
 const boESDCheck = () => {
+  // console.log(theTable);
   for (let i = 0; i <= theTable.length - 1; i++) {
+    // If the item is backordered but waiting for transfer
     if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] == 'In stock! Awaiting transfer') {
       boESDs.skus.push(theTable[i][itmCol.itmSKU]);
       boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
+      // If the item is backordered, is not transferring, and is not a drop ship or special
     } else if (theTable[i][itmCol.numBO] > 0 && theTable[i][itmCol.boStatus] != 'In stock! Awaiting transfer' && !(theTable[i][itmCol.itemType] == "Drop Ship" || theTable[i][itmCol.itemType] == "Special")) {
       boESDs.boItems.push(theTable[i][itmCol.itmSKU]);
-      if (theTable[i][itmCol.boStatus] != '' && ((!theTable[i][itmCol.boStatus].includes('ESD')) && !theTable[i][itmCol.boStatus].includes('due on'))) {
+      // If there's no date
+      if (theTable[i][itmCol.boStatus] != '' && ((!theTable[i][itmCol.boStatus].includes('ESD')) && !theTable[i][itmCol.boStatus].includes('due on') && String(new Date(theTable[i][itmCol.boStatus])) == "Invalid Date")) {
         boESDs.noDates.push(theTable[i][itmCol.itmSKU]);
-      } else {
+        // console.log(`Item ${theTable[i][itmCol.itmSKU]} has date ${String(new Date(theTable[i][itmCol.boStatus]))}`);
+      } else { // Or if there is
         boESDs.hasDates.push(theTable[i][itmCol.itmSKU]);
       }
     }
